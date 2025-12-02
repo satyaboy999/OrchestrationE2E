@@ -1,0 +1,45 @@
+name: Local Orchestration Flow
+ 
+# This allows you to click a "Run workflow" button in the GitHub UI
+on:
+  workflow_dispatch:
+ 
+jobs:
+  # JOB 1: Selenium Maven Test
+  selenium-job:
+    name: Run Local Selenium Tests
+    # 'self-hosted' tells GitHub to look for YOUR computer, not a cloud VM
+    runs-on: self-hosted
+    
+    steps:
+      - name: Execute Maven Tests
+        shell: cmd
+        run: |
+          echo "Starting Selenium Tests..."
+          :: CHANGE THIS PATH to your actual Selenium project folder
+          cd "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project"
+          
+          :: Run maven and pipe output to a log file in your specific logs folder
+          mvn clean test > logs\execution.log 2>&1
+          
+          echo "Selenium Tests Completed. Logs saved locally."
+ 
+  # JOB 2: Python Script
+  python-job:
+    name: Run Local Python Script
+    # This ensures Python only runs if Selenium finishes successfully
+    needs: selenium-job
+    runs-on: self-hosted
+    
+    steps:
+      - name: Execute Python Main
+        shell: cmd
+        run: |
+          echo "Starting Python Script..."
+          :: CHANGE THIS PATH to your actual Python project folder
+          cd "C:\Users\Administrator\Desktop\DA_Failure Analysis Code Base v4_before_log_directory\DA_Failure Analysis Code Base"
+          
+          :: Run your python script
+          python main.py
+          
+          echo "Python Script Finished."
