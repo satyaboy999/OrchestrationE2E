@@ -78,7 +78,7 @@ jobs:
           Write-Host ""
           Write-Host "All tasks completed!" -ForegroundColor Green
 
-      - name: Upload Test Results
+      - name: Upload Selenium Artifacts
         if: always()
         uses: actions/upload-artifact@v3
         with:
@@ -88,31 +88,47 @@ jobs:
             C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\target\allure-results\
             C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\target\site\allure-maven-plugin\
 
-  python-job:
-    name: Run Local Python RCA Analysis
+  python-rca-job:
+    name: Run Python RCA Analysis
     needs: selenium-job
     runs-on: self-hosted
     
     steps:
-      - name: Execute Python Main
+      - name: Validate Selenium Logs Exist
+        shell: powershell
+        run: |
+          $logPath = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs\execution.log"
+          if (-not (Test-Path $logPath)) {
+              Write-Host "ERROR: Selenium logs not found at: $logPath" -ForegroundColor Red
+              exit 1
+          }
+          Write-Host "✓ Selenium logs found, proceeding with RCA analysis" -ForegroundColor Green
+
+      - name: Execute Python RCA Analysis
         shell: powershell
         run: |
           Write-Host "Starting Python RCA Analysis..." -ForegroundColor Cyan
           
-          cd "C:\Users\Administrator\Desktop\DA_Failure Analysis Code Base v4_before_log_directory\DA_Failure Analysis Code Base"
+          $rcaPath = "C:\Users\Administrator\Desktop\DA_Failure Analysis Code Base v4_before_log_directory\DA_Failure Analysis Code Base"
+          $seleniumLogsPath = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs"
           
-          python main.py
+          cd $rcaPath
+          
+          # Run with explicit log directory path
+          python main.py -p "$seleniumLogsPath"
           
           if ($LASTEXITCODE -eq 0) {
-              Write-Host "Python Script Completed Successfully!" -ForegroundColor Green
+              Write-Host "Python RCA Analysis Completed Successfully!" -ForegroundColor Green
           } else {
-              Write-Host "Python Script Failed with exit code: $LASTEXITCODE" -ForegroundColor Red
+              Write-Host "Python RCA Analysis Failed with exit code: $LASTEXITCODE" -ForegroundColor Red
               exit $LASTEXITCODE
           }
       
-      - name: Upload RCA Results
+      - name: Upload RCA Analysis Results
         if: always()
         uses: actions/upload-artifact@v3
         with:
           name: rca-analysis-results
-          path: C:\Users\Administrator\Desktop\DA_Failure Analysis Code Base v4_before_log_directory\DA_Failure Analysis Code Base\outputs\
+          path: |
+            C:\Users\Administrator\Desktop\DA_Failure Analysis Code Base v4_before_log_directory\DA_Failure Analysis Code Base\outputs\
+            C:\Users\Administrator\Desktop\DA_Failure Analysis Code Base v4_before_log_directory\DA_Failure Analysis Code Base\logs_correlated\
