@@ -73,7 +73,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: selenium-test-results
           path: |
@@ -105,7 +105,7 @@ jobs:
       
       - name: Upload RCA Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rca-analysis-results
           path: C:\Users\Administrator\Desktop\DA_Failure Analysis Code Base v4_before_log_directory\DA_Failure Analysis Code Base\outputs\
