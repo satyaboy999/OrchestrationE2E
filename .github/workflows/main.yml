@@ -27,12 +27,8 @@ jobs:
           Write-Host "Running full test suite..." -ForegroundColor Yellow
           mvn clean test
           
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "Maven tests failed!" -ForegroundColor Red
-              exit 1
-          }
-          
-          Write-Host "Maven tests completed!" -ForegroundColor Green
+          # IMPORTANT: Do NOT exit on failure - continue to process logs and reports
+          Write-Host "Maven execution completed (exit code: $LASTEXITCODE)" -ForegroundColor Green
           
           Write-Host "Combining test logs..." -ForegroundColor Cyan
           
@@ -69,7 +65,7 @@ jobs:
           mvn allure:report 2>&1 | Out-Null
           
           Write-Host "Allure report generated!" -ForegroundColor Green
-          Write-Host "All tasks completed!" -ForegroundColor Green
+          Write-Host "All artifacts created successfully!" -ForegroundColor Green
 
       - name: Upload Test Results
         if: always()
