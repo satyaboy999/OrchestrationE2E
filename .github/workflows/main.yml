@@ -65,7 +65,6 @@ jobs:
           
           Write-Host "Allure report generated!" -ForegroundColor Green
           Write-Host "All artifacts created successfully!" -ForegroundColor Green
-
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
@@ -75,7 +74,7 @@ jobs:
             C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs\execution.log
             C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\target\allure-results\
             C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\target\site\allure-maven-plugin\
-
+  
   python-job:
     name: Run Local Python RCA Analysis
     needs: selenium-job
@@ -108,7 +107,6 @@ jobs:
               exit 1
           }
           Write-Host "✓ execution.log found" -ForegroundColor Green
-
       - name: Execute Python RCA Analysis
         shell: powershell
         run: |
