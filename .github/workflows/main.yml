@@ -1,71 +1,39 @@
 name: Local Orchestration Flow
+# Optimized Pipeline: Selenium Tests + Python RCA Analysis
+# This workflow leverages existing run-tests.ps1 instead of duplicating logic
 
 on:
   workflow_dispatch:
 
 jobs:
-  selenium-job:
-    name: Run Local Selenium Tests
+  selenium-tests:
+    name: Run Selenium Test Suite
     runs-on: self-hosted
     
     steps:
-      - name: Execute Maven Tests
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Execute Selenium Tests via run-tests.ps1
         shell: powershell
         run: |
-          Write-Host "Starting Selenium Tests..." -ForegroundColor Cyan
+          Write-Host "Starting Selenium Test Execution Pipeline..." -ForegroundColor Cyan
           
-          cd "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project"
+          $projectPath = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project"
+          cd $projectPath
           
-          if (-not (Test-Path "logs")) {
-              New-Item -ItemType Directory -Path "logs" | Out-Null
+          # Call the existing run-tests.ps1 script for full orchestration
+          # This handles: maven execution, log aggregation, allure report generation
+          & .\run-tests.ps1
+          
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "Selenium test execution failed with exit code: $LASTEXITCODE" -ForegroundColor Red
+              exit 1
           }
           
-          if (Test-Path "logs/execution.log") {
-              Remove-Item "logs/execution.log" -Force
-          }
-          
-          Write-Host "Running full test suite..." -ForegroundColor Yellow
-          mvn clean test
-          
-          Write-Host "Maven execution completed (exit code: $LASTEXITCODE)" -ForegroundColor Green
-          
-          Write-Host "Combining test logs..." -ForegroundColor Cyan
-          
-          $logFiles = @(
-              "logs/OrangeHRMLoginTest.log",
-              "logs/ParaBankRegistrationTest.log",
-              "logs/WorkingTest1.log"
-          )
-          
-          $combinedContent = @()
-          $combinedContent += "================================================================================"
-          $combinedContent += "UNIFIED TEST EXECUTION LOG - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-          $combinedContent += "================================================================================"
-          $combinedContent += ""
-          
-          foreach ($logFile in $logFiles) {
-              if (Test-Path $logFile) {
-                  $combinedContent += Get-Content $logFile
-                  $combinedContent += ""
-              }
-          }
-          
-          $combinedContent | Out-File -FilePath "logs/execution.log" -Encoding UTF8
-          
-          foreach ($logFile in $logFiles) {
-              if (Test-Path $logFile) {
-                  Remove-Item $logFile -Force
-              }
-          }
-          
-          Write-Host "Individual test logs combined into: logs/execution.log" -ForegroundColor Green
-          
-          Write-Host "Generating Allure Report..." -ForegroundColor Cyan
-          mvn allure:report 2>&1 | Out-Null
-          
-          Write-Host "Allure report generated!" -ForegroundColor Green
-          Write-Host "All artifacts created successfully!" -ForegroundColor Green
-      - name: Upload Test Results
+          Write-Host "Selenium Test Suite Completed Successfully" -ForegroundColor Green
+      
+      - name: Upload Selenium Test Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -74,60 +42,68 @@ jobs:
             C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs\execution.log
             C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\target\allure-results\
             C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\target\site\allure-maven-plugin\
-  
-  python-job:
-    name: Run Python RCA Analysis
-    needs: selenium-job
-    runs-on: self-hosted
+          if-no-files-found: warn
+          retention-days: 30
 
+  python-rca-analysis:
+    name: Run Python Root Cause Analysis
+    needs: selenium-tests
+    runs-on: self-hosted
+    
     steps:
-      - name: Validate Paths Exist
+      - name: Validate Required Paths
         shell: powershell
         run: |
-          $rcaPath = "C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base"
-          $seleniumLogsPath = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs"
+          Write-Host "Validating pipeline prerequisites..." -ForegroundColor Cyan
           
-          Write-Host "Validating paths..."
+          $paths = @{
+              'RCA Framework' = "C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base"
+              'Selenium Logs' = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs"
+              'Execution Log' = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs\execution.log"
+          }
           
-          if (-not (Test-Path $rcaPath)) {
-              Write-Host "ERROR: RCA path not found: $rcaPath"
+          $allValid = $true
+          foreach ($pathName in $paths.Keys) {
+              $path = $paths[$pathName]
+              if (Test-Path $path) {
+                  Write-Host "✓ $pathName : $path" -ForegroundColor Green
+              } else {
+                  Write-Host "✗ $pathName NOT FOUND: $path" -ForegroundColor Red
+                  $allValid = $false
+              }
+          }
+          
+          if (-not $allValid) {
+              Write-Host "Path validation failed. Aborting RCA job." -ForegroundColor Red
               exit 1
           }
-          Write-Host "OK: RCA path exists"
           
-          if (-not (Test-Path $seleniumLogsPath)) {
-              Write-Host "ERROR: Selenium logs path not found: $seleniumLogsPath"
-              exit 1
-          }
-          Write-Host "OK: Selenium logs path exists"
-          
-          $logFile = "$seleniumLogsPath\execution.log"
-          if (-not (Test-Path $logFile)) {
-              Write-Host "ERROR: execution.log not found: $logFile"
-              exit 1
-          }
-          Write-Host "OK: execution.log found"
-
+          Write-Host "All paths validated successfully" -ForegroundColor Green
+      
       - name: Execute Python RCA Analysis
         shell: powershell
         run: |
-          Write-Host "Starting Python RCA Analysis..."
+          Write-Host "Starting Python RCA Analysis..." -ForegroundColor Cyan
           
           $rcaPath = "C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base"
           $seleniumLogsPath = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs"
           
-          cd $rcaPath
+          Push-Location $rcaPath
           
+          Write-Host "Analyzing logs from: $seleniumLogsPath" -ForegroundColor Yellow
           python main.py -p "$seleniumLogsPath"
           
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host "Python RCA Analysis Completed Successfully"
+          $exitCode = $LASTEXITCODE
+          Pop-Location
+          
+          if ($exitCode -eq 0) {
+              Write-Host "Python RCA Analysis Completed Successfully" -ForegroundColor Green
           } else {
-              Write-Host "Python RCA Analysis Failed with exit code: $LASTEXITCODE"
+              Write-Host "Python RCA Analysis Failed with exit code: $exitCode" -ForegroundColor Red
               exit 1
           }
-
-      - name: Upload RCA Results
+      
+      - name: Upload RCA Analysis Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -136,4 +112,30 @@ jobs:
             C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base\outputs\
             C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base\logs_correlated\
             C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base\logs_unified\
-            C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base\modules\reporting\reports_data\latest.html
+            C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base\modules\reporting\reports_data\
+          if-no-files-found: warn
+          retention-days: 30
+
+  pipeline-summary:
+    name: Pipeline Execution Summary
+    needs: [selenium-tests, python-rca-analysis]
+    if: always()
+    runs-on: self-hosted
+    
+    steps:
+      - name: Determine Pipeline Status
+        shell: powershell
+        run: |
+          Write-Host "======================================" -ForegroundColor Cyan
+          Write-Host "    PIPELINE EXECUTION SUMMARY" -ForegroundColor Cyan
+          Write-Host "======================================" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Job 1 - Selenium Tests : ${{ needs.selenium-tests.result }}" -ForegroundColor Yellow
+          Write-Host "Job 2 - RCA Analysis   : ${{ needs.python-rca-analysis.result }}" -ForegroundColor Yellow
+          Write-Host ""
+          
+          if ("${{ needs.selenium-tests.result }}" -eq "success" -and "${{ needs.python-rca-analysis.result }}" -eq "success") {
+              Write-Host "Overall Status: ✓ PASSED" -ForegroundColor Green
+          } else {
+              Write-Host "Overall Status: ✗ FAILED" -ForegroundColor Red
+          }
