@@ -1,6 +1,4 @@
 name: Local Orchestration Flow
-# Optimized Pipeline: Selenium Tests + Python RCA Analysis
-# This workflow leverages existing run-tests.ps1 instead of duplicating logic
 
 on:
   workflow_dispatch:
@@ -66,9 +64,9 @@ jobs:
           foreach ($pathName in $paths.Keys) {
               $path = $paths[$pathName]
               if (Test-Path $path) {
-                  Write-Host "✓ $pathName : $path" -ForegroundColor Green
+                  Write-Host "[OK] $pathName : $path" -ForegroundColor Green
               } else {
-                  Write-Host "✗ $pathName NOT FOUND: $path" -ForegroundColor Red
+                  Write-Host "[FAIL] $pathName NOT FOUND: $path" -ForegroundColor Red
                   $allValid = $false
               }
           }
@@ -115,27 +113,3 @@ jobs:
             C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base\modules\reporting\reports_data\
           if-no-files-found: warn
           retention-days: 30
-
-  pipeline-summary:
-    name: Pipeline Execution Summary
-    needs: [selenium-tests, python-rca-analysis]
-    if: always()
-    runs-on: self-hosted
-    
-    steps:
-      - name: Determine Pipeline Status
-        shell: powershell
-        run: |
-          Write-Host "======================================" -ForegroundColor Cyan
-          Write-Host "    PIPELINE EXECUTION SUMMARY" -ForegroundColor Cyan
-          Write-Host "======================================" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "Job 1 - Selenium Tests : ${{ needs.selenium-tests.result }}" -ForegroundColor Yellow
-          Write-Host "Job 2 - RCA Analysis   : ${{ needs.python-rca-analysis.result }}" -ForegroundColor Yellow
-          Write-Host ""
-          
-          if ("${{ needs.selenium-tests.result }}" -eq "success" -and "${{ needs.python-rca-analysis.result }}" -eq "success") {
-              Write-Host "Overall Status: ✓ PASSED" -ForegroundColor Green
-          } else {
-              Write-Host "Overall Status: ✗ FAILED" -ForegroundColor Red
-          }
