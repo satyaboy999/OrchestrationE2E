@@ -77,6 +77,15 @@ jobs:
           }
           
           Write-Host "All paths validated successfully" -ForegroundColor Green
+          
+          # Validate that execution.log contains content
+          $logPath = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs\execution.log"
+          $logSize = (Get-Item $logPath).Length
+          Write-Host "Execution log size: $logSize bytes" -ForegroundColor Cyan
+          
+          if ($logSize -lt 100) {
+              Write-Host "[WARNING] Execution log is very small - may not contain actual test failures" -ForegroundColor Yellow
+          }
       
       - name: Execute Python RCA Analysis
         shell: powershell
