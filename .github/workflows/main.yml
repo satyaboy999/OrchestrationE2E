@@ -2,113 +2,313 @@ name: Local Orchestration Flow
 
 on:
   workflow_dispatch:
+    inputs:
+      testSetId:
+        description: 'Test Set ID to execute'
+        required: true
+        default: '1'
+        type: string
+      monitoringTimeout:
+        description: 'Monitoring timeout in minutes'
+        required: false
+        default: '30'
+        type: string
+
+env:
+  ATOP_TESTS_PATH: "C:\\Users\\Administrator\\Desktop\\AtopCICDRAC"
+  ATOP_LOGS_PATH: "C:\\ServerSuitLogs\\TestSets"
+  PIPELINE_REPORTS_PATH: "C:\\RACAtopPipeline"
+  RCA_PATH: "C:\\Users\\Administrator\\Desktop\\Test1\\DA_Failure Analysis Code Base"
 
 jobs:
-  selenium-tests:
-    name: Run Selenium Test Suite
+  atop-test-execution:
+    name: Job 1 - ATOP Talos Test Suite Execution
     runs-on: self-hosted
     
     steps:
-      - name: Checkout Code
+      - name: Checkout ATOP Pipeline Code
         uses: actions/checkout@v4
-      
-      - name: Execute Selenium Tests via run-tests.ps1
-        shell: powershell
-        run: |
-          Write-Host "Starting Selenium Test Execution Pipeline..." -ForegroundColor Cyan
-          
-          $projectPath = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project"
-          cd $projectPath
-          
-          # Call the existing run-tests.ps1 script for full orchestration
-          # This handles: maven execution, log aggregation, allure report generation
-          & .\run-tests.ps1
-          
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "Selenium test execution failed with exit code: $LASTEXITCODE" -ForegroundColor Red
-              exit 1
-          }
-          
-          Write-Host "Selenium Test Suite Completed Successfully" -ForegroundColor Green
-      
-      - name: Upload Selenium Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: selenium-test-results
-          path: |
-            C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs\execution.log
-            C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\target\allure-results\
-            C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\target\site\allure-maven-plugin\
-          if-no-files-found: warn
-          retention-days: 30
-
-  python-rca-analysis:
-    name: Run Python Root Cause Analysis
-    needs: selenium-tests
-    runs-on: self-hosted
-    
-    steps:
-      - name: Validate Required Paths
+          path: atop-cicd
+      
+      - name: Display Configuration
         shell: powershell
         run: |
-          Write-Host "Validating pipeline prerequisites..." -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "   Job 1: ATOP Talos Test Execution" -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Configuration:" -ForegroundColor Yellow
+          Write-Host "  Test Set ID: ${{ github.event.inputs.testSetId }}" -ForegroundColor White
+          Write-Host "  Monitoring Timeout: ${{ github.event.inputs.monitoringTimeout }} minutes" -ForegroundColor White
+          Write-Host "  Tests Script Path: ${{ env.ATOP_TESTS_PATH }}" -ForegroundColor White
+          Write-Host "  Test Logs Base: ${{ env.ATOP_LOGS_PATH }}" -ForegroundColor White
+          Write-Host "  Pipeline Reports: ${{ env.PIPELINE_REPORTS_PATH }}" -ForegroundColor White
+          Write-Host ""
+      
+      - name: Validate Prerequisites
+        shell: powershell
+        run: |
+          Write-Host "Validating ATOP pipeline prerequisites..." -ForegroundColor Cyan
+          Write-Host ""
           
           $paths = @{
-              'RCA Framework' = "C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base"
-              'Selenium Logs' = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs"
-              'Execution Log' = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs\execution.log"
+              'ATOP Tests Script' = "${{ env.ATOP_TESTS_PATH }}\trigger-tests.ps1"
+              'Test Logs Base Path' = "${{ env.ATOP_LOGS_PATH }}"
           }
           
           $allValid = $true
           foreach ($pathName in $paths.Keys) {
               $path = $paths[$pathName]
               if (Test-Path $path) {
-                  Write-Host "[OK] $pathName : $path" -ForegroundColor Green
+                  Write-Host "[OK] $pathName exists" -ForegroundColor Green
+                  Write-Host "     Path: $path" -ForegroundColor Gray
               } else {
-                  Write-Host "[FAIL] $pathName NOT FOUND: $path" -ForegroundColor Red
+                  Write-Host "[ERROR] $pathName NOT FOUND" -ForegroundColor Red
+                  Write-Host "     Expected: $path" -ForegroundColor Gray
                   $allValid = $false
               }
           }
           
+          Write-Host ""
           if (-not $allValid) {
-              Write-Host "Path validation failed. Aborting RCA job." -ForegroundColor Red
+              Write-Host "Validation FAILED. Aborting Job 1." -ForegroundColor Red
               exit 1
           }
           
-          Write-Host "All paths validated successfully" -ForegroundColor Green
-          
-          # Validate that execution.log contains content
-          $logPath = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs\execution.log"
-          $logSize = (Get-Item $logPath).Length
-          Write-Host "Execution log size: $logSize bytes" -ForegroundColor Cyan
-          
-          if ($logSize -lt 100) {
-              Write-Host "[WARNING] Execution log is very small - may not contain actual test failures" -ForegroundColor Yellow
-          }
+          Write-Host "All prerequisites validated successfully" -ForegroundColor Green
+          Write-Host ""
       
-      - name: Execute Python RCA Analysis
+      - name: Execute ATOP Talos Tests
         shell: powershell
         run: |
-          Write-Host "Starting Python RCA Analysis..." -ForegroundColor Cyan
+          Write-Host "Starting ATOP Talos Test Execution..." -ForegroundColor Cyan
+          Write-Host ""
           
-          $rcaPath = "C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base"
-          $seleniumLogsPath = "C:\Users\Administrator\Desktop\OrangeHRM_Selenium_Project\logs"
+          $testSetId = "${{ github.event.inputs.testSetId }}"
+          $monitoringTimeout = "${{ github.event.inputs.monitoringTimeout }}"
+          
+          cd "${{ env.ATOP_TESTS_PATH }}"
+          
+          # Execute trigger-tests.ps1 with parameters
+          & .\trigger-tests.ps1 `
+            -TestSetId $testSetId `
+            -MonitoringTimeoutMinutes $monitoringTimeout `
+            -UseFileMonitoring $true `
+            -UseApiStatus $true
+          
+          $exitCode = $LASTEXITCODE
+          Write-Host ""
+          
+          if ($exitCode -eq 0) {
+              Write-Host "[SUCCESS] ATOP Talos Tests Executed Successfully" -ForegroundColor Green
+          } else {
+              Write-Host "[ERROR] ATOP Talos Tests Failed with exit code: $exitCode" -ForegroundColor Red
+              exit 1
+          }
+      
+      - name: Verify Reports in Pipeline
+        shell: powershell
+        run: |
+          Write-Host "Verifying reports in pipeline..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          $pipelinePath = "${{ env.PIPELINE_REPORTS_PATH }}"
+          
+          if (Test-Path $pipelinePath) {
+              Write-Host "Pipeline path exists: $pipelinePath" -ForegroundColor Green
+              Write-Host ""
+              
+              $htmlReports = Get-ChildItem -Path $pipelinePath -Filter "*.html" -ErrorAction SilentlyContinue
+              if ($htmlReports.Count -gt 0) {
+                  Write-Host "HTML Reports found: $($htmlReports.Count)" -ForegroundColor Green
+                  foreach ($report in $htmlReports) {
+                      Write-Host "  - $($report.Name)" -ForegroundColor Green
+                  }
+              } else {
+                  Write-Host "[WARNING] No HTML reports found in pipeline path" -ForegroundColor Yellow
+              }
+              
+              # Check for ScreenShots folders
+              $screenshots = Get-ChildItem -Path $pipelinePath -Directory -Filter "ScreenShots*" -ErrorAction SilentlyContinue
+              if ($screenshots.Count -eq 0) {
+                  Write-Host "ScreenShots folders: None (as expected)" -ForegroundColor Green
+              } else {
+                  Write-Host "[WARNING] Found $($screenshots.Count) ScreenShots folder(s) - should have been removed" -ForegroundColor Yellow
+              }
+          } else {
+              Write-Host "[ERROR] Pipeline path does not exist: $pipelinePath" -ForegroundColor Red
+              exit 1
+          }
+          
+          Write-Host ""
+          Write-Host "[SUCCESS] Report verification complete" -ForegroundColor Green
+      
+      - name: Upload ATOP Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: atop-test-reports
+          path: C:\RACAtopPipeline\*.html
+          if-no-files-found: warn
+          retention-days: 30
+
+  rca-analysis:
+    name: Job 2 - Local Orchestration Flow (RCA Analysis)
+    needs: atop-test-execution
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout RCA Analysis Code
+        uses: actions/checkout@v4
+        with:
+          path: rca-analysis
+      
+      - name: Display RCA Configuration
+        shell: powershell
+        run: |
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "   Job 2: Local Orchestration Flow (RCA)" -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Configuration:" -ForegroundColor Yellow
+          Write-Host "  RCA Framework Path: ${{ env.RCA_PATH }}" -ForegroundColor White
+          Write-Host "  Pipeline Reports: ${{ env.PIPELINE_REPORTS_PATH }}" -ForegroundColor White
+          Write-Host ""
+      
+      - name: Validate RCA Prerequisites
+        shell: powershell
+        run: |
+          Write-Host "Validating RCA pipeline prerequisites..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          $paths = @{
+              'RCA Framework' = "${{ env.RCA_PATH }}"
+              'RCA main.py' = "${{ env.RCA_PATH }}\main.py"
+              'Pipeline Reports' = "${{ env.PIPELINE_REPORTS_PATH }}"
+          }
+          
+          $allValid = $true
+          foreach ($pathName in $paths.Keys) {
+              $path = $paths[$pathName]
+              if (Test-Path $path) {
+                  Write-Host "[OK] $pathName exists" -ForegroundColor Green
+                  Write-Host "     Path: $path" -ForegroundColor Gray
+              } else {
+                  Write-Host "[ERROR] $pathName NOT FOUND" -ForegroundColor Red
+                  Write-Host "     Expected: $path" -ForegroundColor Gray
+                  $allValid = $false
+              }
+          }
+          
+          Write-Host ""
+          if (-not $allValid) {
+              Write-Host "Validation FAILED. Aborting Job 2." -ForegroundColor Red
+              exit 1
+          }
+          
+          Write-Host "All RCA prerequisites validated successfully" -ForegroundColor Green
+          Write-Host ""
+      
+      - name: Check Available Reports
+        shell: powershell
+        run: |
+          Write-Host "Checking available reports for RCA analysis..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          $pipelinePath = "${{ env.PIPELINE_REPORTS_PATH }}"
+          
+          $htmlReports = Get-ChildItem -Path $pipelinePath -Filter "*.html" -ErrorAction SilentlyContinue
+          if ($htmlReports.Count -gt 0) {
+              Write-Host "HTML Reports available for analysis: $($htmlReports.Count)" -ForegroundColor Green
+              foreach ($report in $htmlReports) {
+                  $size = (Get-Item $report.FullName).Length / 1KB
+                  Write-Host "  - $($report.Name) ($([Math]::Round($size, 2)) KB)" -ForegroundColor Green
+              }
+              Write-Host ""
+          } else {
+              Write-Host "[WARNING] No HTML reports found - RCA analysis may not have data to process" -ForegroundColor Yellow
+              Write-Host ""
+          }
+      
+      - name: Execute Local Orchestration Flow (RCA Analysis)
+        shell: powershell
+        run: |
+          Write-Host "Starting Local Orchestration Flow - RCA Analysis..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          $rcaPath = "${{ env.RCA_PATH }}"
+          $pipelineReports = "${{ env.PIPELINE_REPORTS_PATH }}"
+          
+          # Validate RCA path
+          if (-not (Test-Path $rcaPath)) {
+              Write-Host "[ERROR] RCA path not found: $rcaPath" -ForegroundColor Red
+              exit 1
+          }
           
           Push-Location $rcaPath
           
-          Write-Host "Analyzing logs from: $seleniumLogsPath" -ForegroundColor Yellow
-          python main.py -p "$seleniumLogsPath"
+          Write-Host "RCA Working Directory: $rcaPath" -ForegroundColor Yellow
+          Write-Host "Input Reports Path: $pipelineReports" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Executing RCA analysis..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          # Check if Python is available
+          $pythonPath = $(python --version 2>&1)
+          if ($?) {
+              Write-Host "Python found: $pythonPath" -ForegroundColor Green
+          } else {
+              Write-Host "[ERROR] Python not found in PATH" -ForegroundColor Red
+              Pop-Location
+              exit 1
+          }
+          
+          Write-Host ""
+          
+          # Execute RCA main.py with pipeline reports path
+          python main.py -p "$pipelineReports"
           
           $exitCode = $LASTEXITCODE
           Pop-Location
           
+          Write-Host ""
           if ($exitCode -eq 0) {
-              Write-Host "Python RCA Analysis Completed Successfully" -ForegroundColor Green
+              Write-Host "[SUCCESS] Local Orchestration Flow (RCA) Completed Successfully" -ForegroundColor Green
           } else {
-              Write-Host "Python RCA Analysis Failed with exit code: $exitCode" -ForegroundColor Red
-              exit 1
+              Write-Host "[ERROR] RCA Analysis Failed with exit code: $exitCode" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Note: Proceeding to collect results despite error" -ForegroundColor Yellow
           }
+      
+      - name: Verify RCA Output
+        if: always()
+        shell: powershell
+        run: |
+          Write-Host "Verifying RCA Analysis Outputs..." -ForegroundColor Cyan
+          Write-Host ""
+          
+          $rcaPath = "${{ env.RCA_PATH }}"
+          
+          $outputDirs = @(
+              "outputs",
+              "logs_correlated",
+              "logs_unified",
+              "modules\reporting\reports_data"
+          )
+          
+          foreach ($dir in $outputDirs) {
+              $fullPath = Join-Path $rcaPath $dir
+              if (Test-Path $fullPath) {
+                  $itemCount = (Get-ChildItem -Path $fullPath -Recurse -ErrorAction SilentlyContinue).Count
+                  Write-Host "[OK] $dir found ($itemCount items)" -ForegroundColor Green
+              } else {
+                  Write-Host "[INFO] $dir not found (may not be created yet)" -ForegroundColor Yellow
+              }
+          }
+          
+          Write-Host ""
+          Write-Host "RCA output verification complete" -ForegroundColor Green
       
       - name: Upload RCA Analysis Results
         if: always()
@@ -122,3 +322,47 @@ jobs:
             C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base\modules\reporting\reports_data\
           if-no-files-found: warn
           retention-days: 30
+
+  final-summary:
+    name: Execution Summary
+    needs: [atop-test-execution, rca-analysis]
+    runs-on: self-hosted
+    if: always()
+    
+    steps:
+      - name: Display Pipeline Summary
+        shell: powershell
+        run: |
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "   Local Orchestration Flow - Summary" -ForegroundColor Green
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host ""
+          
+          Write-Host "Pipeline Execution Summary:" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Job 1: ATOP Talos Test Execution" -ForegroundColor White
+          Write-Host "  Status: ${{ needs.atop-test-execution.result }}" -ForegroundColor Green
+          Write-Host "  Reports: C:\RACAtopPipeline\" -ForegroundColor Gray
+          Write-Host ""
+          
+          Write-Host "Job 2: Local Orchestration Flow (RCA Analysis)" -ForegroundColor White
+          Write-Host "  Status: ${{ needs.rca-analysis.result }}" -ForegroundColor Green
+          Write-Host "  Output: C:\Users\Administrator\Desktop\Test1\DA_Failure Analysis Code Base\" -ForegroundColor Gray
+          Write-Host ""
+          
+          $atopStatus = "${{ needs.atop-test-execution.result }}"
+          $rcaStatus = "${{ needs.rca-analysis.result }}"
+          
+          if ($atopStatus -eq "success" -and $rcaStatus -eq "success") {
+              Write-Host "Overall Status: SUCCESS" -ForegroundColor Green
+              Write-Host "All jobs executed successfully!" -ForegroundColor Green
+          } elseif ($atopStatus -eq "success" -or $rcaStatus -eq "success") {
+              Write-Host "Overall Status: PARTIAL SUCCESS" -ForegroundColor Yellow
+              Write-Host "Some jobs completed, others failed or were skipped" -ForegroundColor Yellow
+          } else {
+              Write-Host "Overall Status: FAILURE" -ForegroundColor Red
+              Write-Host "One or more jobs failed" -ForegroundColor Red
+          }
+          
+          Write-Host ""
+          Write-Host "==========================================" -ForegroundColor Cyan
